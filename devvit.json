@@ -1,0 +1,84 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "disclosure-gate",
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "triggers": {
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onPostSubmit": "/internal/triggers/on-post-submit",
+    "onCommentSubmit": "/internal/triggers/on-comment-submit"
+  },
+  "settings": {
+    "subreddit": {
+      "general": {
+        "type": "group",
+        "label": "General",
+        "fields": {
+          "enabled": {
+            "type": "boolean",
+            "label": "Enabled",
+            "helpText": "Turn the disclosure gate on for new posts. Posts made while this is off are never gated.",
+            "defaultValue": false
+          },
+          "removePost": {
+            "type": "boolean",
+            "label": "Remove posts until OP replies",
+            "helpText": "Remove each new post and approve it once OP replies to the disclosure comment. If off, the comment is still posted and updated, but the post stays visible. The default request text assumes this is on.",
+            "defaultValue": true
+          },
+          "stickyComment": {
+            "type": "boolean",
+            "label": "Sticky the disclosure comment",
+            "helpText": "Distinguish and pin the comment to the top of the post.",
+            "defaultValue": true
+          }
+        }
+      },
+      "exemptions": {
+        "type": "group",
+        "label": "Exemptions",
+        "helpText": "Moderators and the app account are always exempt.",
+        "fields": {
+          "exemptApprovedUsers": {
+            "type": "boolean",
+            "label": "Exempt approved users",
+            "helpText": "Skip posts by the subreddit's approved users.",
+            "defaultValue": false
+          },
+          "exemptPostFlairs": {
+            "type": "paragraph",
+            "label": "Exempt post flairs",
+            "helpText": "Skip posts with one of these post flairs. One flair text per line, case-insensitive exact match.",
+            "defaultValue": ""
+          }
+        }
+      },
+      "text": {
+        "type": "group",
+        "label": "Comment text",
+        "helpText": "Reddit markdown. Placeholders: {{author}}, {{subreddit}}, {{post_link}}. The confirmed text can also use {{reply}} (OP's reply, quoted) and {{reply_link}}.",
+        "fields": {
+          "requestText": {
+            "type": "paragraph",
+            "label": "Request comment",
+            "helpText": "Posted on each new post, asking OP to reply.",
+            "defaultValue": "**AI disclosure required**\n\nr/{{subreddit}} asks authors to disclose whether they used AI tools. u/{{author}}, please reply to this comment describing whether and how you used AI tools for this post, including for spelling or translation. If you didn't use any, just say so.\n\nYour post is hidden until you reply here, and will be restored automatically once you do.",
+            "validationEndpoint": "/internal/settings/validate-request-text"
+          },
+          "confirmedText": {
+            "type": "paragraph",
+            "label": "Confirmed comment",
+            "helpText": "Replaces the request comment once OP replies. Quoting {{reply}} keeps the disclosure even if OP later deletes their reply.",
+            "defaultValue": "**AI disclosure from u/{{author}}:**\n\n{{reply}}\n\n^([original reply]({{reply_link}}))",
+            "validationEndpoint": "/internal/settings/validate-confirmed-text"
+          }
+        }
+      }
+    }
+  },
+  "permissions": {
+    "reddit": true
+  }
+}
