@@ -13,9 +13,7 @@ export const DEFAULT_REQUEST_TEXT =
   'Your post is hidden until you reply here, and will be restored automatically once you do.';
 
 export const DEFAULT_CONFIRMED_TEXT =
-  '**AI disclosure from u/{{author}}:**\n\n' +
-  '{{reply}}\n\n' +
-  '^([original reply]({{reply_link}}))';
+  '**AI disclosure from u/{{author}}:**\n\n{{reply}}';
 
 export const SETTING_DEFAULTS = {
   removePost: true,

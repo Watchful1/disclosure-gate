@@ -65,7 +65,7 @@
             "type": "paragraph",
             "label": "Confirmed comment",
             "helpText": "Replaces the request comment once OP replies. Quoting {{reply}} keeps the disclosure even if OP later deletes their reply.",
-            "defaultValue": "**AI disclosure from u/{{author}}:**\n\n{{reply}}\n\n^([original reply]({{reply_link}}))",
+            "defaultValue": "**AI disclosure from u/{{author}}:**\n\n{{reply}}",
             "validationEndpoint": "/internal/settings/validate-confirmed-text"
           }
         }

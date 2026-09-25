@@ -24,7 +24,7 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 - [ ] The removal shows the mod note "Awaiting OP reply to disclosure comment" in the mod log / queue.
 - [ ] A different user replies to the app's comment → nothing changes. Log: `ignore-reply ... reason="commenter is not OP"`.
 - [ ] Alt makes a top-level comment → nothing changes (no log line; it isn't a reply to the request).
-- [ ] Alt replies to the app's comment → the comment is edited to the confirmed text quoting the reply, the `original reply` link works, and the post is approved. Log: `confirmed ... approved=true`.
+- [ ] Alt replies to the app's comment → the comment is edited to the confirmed text quoting the reply, and the post is approved. Log: `confirmed ... approved=true`.
 - [ ] Alt replies to the app's comment again → nothing changes (the record is already confirmed, so the reply is dropped without a log line).
 - [ ] A reply containing `{{author}}` is quoted literally, not expanded.
 - [ ] A reply longer than 1,500 characters is truncated with `…`.

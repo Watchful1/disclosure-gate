@@ -74,8 +74,6 @@ Your post is hidden until you reply here, and will be restored automatically onc
 **AI disclosure from u/{{author}}:**
 
 {{reply}}
-
-^([original reply]({{reply_link}}))
 ```
 
 If you turn off **Remove posts until OP replies**, edit the request text too, because the default says the post is hidden.
