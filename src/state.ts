@@ -40,3 +40,12 @@ export async function claimOnce(
   });
   return !!result;
 }
+
+/** Release a claimOnce key so a later delivery or reply can retry. */
+export async function releaseClaim(key: string): Promise<void> {
+  try {
+    await redis.del(key);
+  } catch {
+    // Best effort: the key's TTL releases it eventually.
+  }
+}

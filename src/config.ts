@@ -40,17 +40,17 @@ export const REMOVAL_NOTE = 'Awaiting OP reply to disclosure comment';
 /** OP's reply is truncated to this many characters before quoting. */
 export const REPLY_QUOTE_MAX_CHARS = 1500;
 
-/**
- * Upper bound for a text setting. Reddit comments cap at 10,000 characters;
- * this leaves room for the quoted reply and expanded placeholders.
- */
-export const TEXT_SETTING_MAX_CHARS = 9000;
+/** Reddit's maximum comment length. */
+export const COMMENT_MAX_CHARS = 10_000;
 
 export const REDIS_KEYS = {
   gate: (postId: string) => `gate:${postId}`,
   seen: (postId: string) => `seen:${postId}`,
-  /** SETNX lock so only the first OP reply confirms, even if two race. */
-  confirmClaim: (postId: string) => `confirm:${postId}`,
+  /**
+   * Short SETNX lock so two OP replies arriving together don't both confirm.
+   * The record's status is the durable "done" marker, not this.
+   */
+  confirmLock: (postId: string) => `confirm:${postId}`,
   modsCache: 'mods:cache',
 } as const;
 
@@ -59,5 +59,6 @@ export const TTL = {
   /** Also the effective deadline for OP to reply. */
   gate: 30 * 24 * 60 * 60,
   seen: 60 * 60,
+  confirmLock: 5 * 60,
   modsCache: 15 * 60,
 } as const;

@@ -1,5 +1,5 @@
 import { context, reddit } from '@devvit/web/server';
-import type { T3 } from '@devvit/shared-types/tid.js';
+import type { T3 } from '@devvit/web/shared';
 import { LOG_PREFIX } from './config';
 
 /**
@@ -72,11 +72,34 @@ export type ApprovalGateInput = {
   removed: boolean;
   /** Reddit's username for whoever performed the current removal. */
   removedBy: string | undefined;
+  /** Reddit's category for the current removal, e.g. 'moderator', 'automod_filtered'. */
+  removedByCategory: string | undefined;
+  /** Post is marked as spam. */
+  spam: boolean;
   /** Our app account's username. */
   appAccount: string | undefined;
   /** True if our gate record says we removed the post. */
   marker: boolean;
 };
+
+/**
+ * Removal categories consistent with our own removal. The app removes as a
+ * moderator, so anything else (AutoMod, the spam filter, admins) isn't ours.
+ */
+const OUR_REMOVAL_CATEGORIES: ReadonlySet<string> = new Set(['moderator']);
+
+/**
+ * True if the post is already held by someone: removed, marked as spam, or
+ * given a removal category (e.g. AutoMod filtering, which may not set
+ * `removed`).
+ */
+export function isAlreadyRemoved(post: {
+  removed: boolean;
+  spam: boolean;
+  removedByCategory: string | undefined;
+}): boolean {
+  return post.removed || post.spam || !!post.removedByCategory;
+}
 
 export type ApprovalGateResult = {
   approve: boolean;
@@ -94,7 +117,8 @@ export type ApprovalGateResult = {
  * re-removes it — trusting it alone would undo their removal.
  *
  * When `removedBy` is absent (Reddit doesn't always populate it, e.g. for
- * AutoMod filtering) we fall back to the marker.
+ * AutoMod filtering) we fall back to the marker, but only if nothing else
+ * points at another remover: not spam, and a moderator-type category.
  */
 export function evaluateApprovalGate(
   input: ApprovalGateInput
@@ -125,6 +149,23 @@ export function evaluateApprovalGate(
     };
   }
 
+  if (input.spam) {
+    return {
+      approve: false,
+      removedBySomeoneElse: true,
+      reason: 'removedBy unavailable and post is marked as spam',
+    };
+  }
+  if (
+    input.removedByCategory &&
+    !OUR_REMOVAL_CATEGORIES.has(input.removedByCategory)
+  ) {
+    return {
+      approve: false,
+      removedBySomeoneElse: true,
+      reason: `removedBy unavailable and removal category is ${input.removedByCategory}`,
+    };
+  }
   if (input.marker) {
     return {
       approve: true,
@@ -155,6 +196,8 @@ export async function approveIfOurs(
   const gate = evaluateApprovalGate({
     removed: post.removed,
     removedBy: post.removedBy,
+    removedByCategory: post.removedByCategory,
+    spam: post.spam,
     appAccount: getAppAccountUsername(),
     marker: removedByUs,
   });

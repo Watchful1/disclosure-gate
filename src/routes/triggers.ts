@@ -1,7 +1,13 @@
 import { Hono } from 'hono';
 import { context, reddit } from '@devvit/web/server';
-import type { OnAppInstallRequest, TriggerResponse } from '@devvit/web/shared';
-import type { T1, T3 } from '@devvit/shared-types/tid.js';
+import type {
+  OnAppInstallRequest,
+  OnCommentCreateRequest,
+  OnPostCreateRequest,
+  T1,
+  T3,
+  TriggerResponse,
+} from '@devvit/web/shared';
 import { LOG_PREFIX, REDIS_KEYS, REMOVAL_NOTE, TTL } from '../config';
 import {
   isApprovedUser,
@@ -20,36 +26,22 @@ import {
   approveIfOurs,
   distinguishComment,
   getAppAccountUsername,
+  isAlreadyRemoved,
   withGrpcRetry,
 } from '../reddit';
 import { getSettings, type ResolvedSettings } from '../settings';
-import { claimOnce, getGate, setGate } from '../state';
+import { claimOnce, getGate, releaseClaim, setGate } from '../state';
 import { commentLink, postLink, quoteReply, render } from '../template';
 
+/**
+ * Triggers run on PostCreate / CommentCreate, which fire after Reddit's safety
+ * delay. By then AutoMod and the spam filter have acted, so a post they hold
+ * shows as removed and is left alone, and a reply they removed is never
+ * quoted into our comment.
+ */
 export const triggers = new Hono();
 
-// Devvit doesn't publish exhaustive TS shapes for trigger bodies; they mirror
-// the public-api PostSubmit / CommentSubmit events. We declare what we read.
-type UserLike = { id?: string; name?: string };
-type PostLike = {
-  id?: string;
-  authorId?: string;
-  linkFlair?: { text?: string };
-};
-type CommentLike = {
-  id?: string;
-  parentId?: string;
-  postId?: string;
-  body?: string;
-};
-type PostSubmitBody = { post?: PostLike; author?: UserLike };
-type CommentSubmitBody = {
-  post?: PostLike;
-  comment?: CommentLike;
-  author?: UserLike;
-};
-
-const ok = { status: 'success' } as const;
+const ok = {} satisfies TriggerResponse;
 
 function log(event: string, fields: Record<string, unknown>): void {
   const parts = [LOG_PREFIX, event];
@@ -62,16 +54,25 @@ function log(event: string, fields: Record<string, unknown>): void {
   console.log(parts.join(' '));
 }
 
+/** The trigger header normally carries this; fall back to the event payload. */
+function subredditNameFrom(payloadName: string | undefined): string {
+  return context.subredditName || payloadName || '';
+}
+
 async function findExemption(
   authorName: string,
   flairText: string | undefined,
+  subredditName: string,
   settings: ResolvedSettings
 ): Promise<Exemption | null> {
-  if (await isModerator(authorName)) return 'moderator';
+  if (await isModerator(authorName, subredditName)) return 'moderator';
   if (isExemptFlair(flairText, parseFlairList(settings.exemptPostFlairs))) {
     return 'post-flair';
   }
-  if (settings.exemptApprovedUsers && (await isApprovedUser(authorName))) {
+  if (
+    settings.exemptApprovedUsers &&
+    (await isApprovedUser(authorName, subredditName))
+  ) {
     return 'approved-user';
   }
   return null;
@@ -79,19 +80,16 @@ async function findExemption(
 
 triggers.post('/on-app-install', async (c) => {
   const input = await c.req.json<OnAppInstallRequest>();
-  log('installed', { subreddit: input.subreddit?.name });
-  try {
-    await refreshModeratorCache();
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} on-app-install: mod cache warm failed`, err);
-  }
+  const subreddit = subredditNameFrom(input.subreddit?.name);
+  log('installed', { subreddit });
+  if (subreddit) await refreshModeratorCache(subreddit);
   return c.json<TriggerResponse>(ok, 200);
 });
 
-triggers.post('/on-post-submit', async (c) => {
-  let body: PostSubmitBody;
+triggers.post('/on-post-create', async (c) => {
+  let body: OnPostCreateRequest;
   try {
-    body = await c.req.json<PostSubmitBody>();
+    body = await c.req.json<OnPostCreateRequest>();
   } catch {
     return c.json<TriggerResponse>(ok, 200);
   }
@@ -99,16 +97,20 @@ triggers.post('/on-post-submit', async (c) => {
   const authorName = body.author?.name;
   if (!postIdRaw || !authorName) return c.json<TriggerResponse>(ok, 200);
   const postId = postIdRaw as T3;
+  const subreddit = subredditNameFrom(body.subreddit?.name);
 
-  if (!(await claimOnce(REDIS_KEYS.seen(postId), TTL.seen))) {
+  const seenKey = REDIS_KEYS.seen(postId);
+  if (!(await claimOnce(seenKey, TTL.seen))) {
     log('skip-post', { postId, reason: 'duplicate delivery' });
     return c.json<TriggerResponse>(ok, 200);
   }
 
   try {
-    await gatePost(postId, authorName, body.post?.linkFlair?.text);
+    await gatePost(postId, authorName, body.post?.linkFlair?.text, subreddit);
   } catch (err) {
-    console.error(`${LOG_PREFIX} on-post-submit error postId=${postId}`, err);
+    console.error(`${LOG_PREFIX} on-post-create error postId=${postId}`, err);
+    // Let a redelivery retry. The gate record guards against double-gating.
+    await releaseClaim(seenKey);
   }
   return c.json<TriggerResponse>(ok, 200);
 });
@@ -116,13 +118,14 @@ triggers.post('/on-post-submit', async (c) => {
 async function gatePost(
   postId: T3,
   authorName: string,
-  flairText: string | undefined
+  flairText: string | undefined,
+  subreddit: string
 ): Promise<void> {
   const settings = await getSettings();
   const decision = decidePost({
     removePost: settings.removePost,
     stickyComment: settings.stickyComment,
-    exemption: await findExemption(authorName, flairText, settings),
+    exemption: await findExemption(authorName, flairText, subreddit, settings),
     alreadyGated: (await getGate(postId)) !== null,
   });
   if (decision.kind === 'skip') {
@@ -138,10 +141,14 @@ async function gatePost(
         () => reddit.getPostById(postId),
         'gatePost:getPostById'
       );
-      // If AutoMod, the spam filter or a mod already removed it, leave that
-      // removal alone. Removing again would make us the recorded remover, and
-      // OP's reply would then approve a post someone else meant to hold.
-      if (post.removed) {
+      const app = getAppAccountUsername()?.toLowerCase();
+      if (post.removed && app && post.removedBy?.toLowerCase() === app) {
+        // Our own removal from an earlier delivery that failed partway.
+        removedByUs = true;
+      } else if (isAlreadyRemoved(post)) {
+        // AutoMod, the spam filter or a mod already holds it. Removing again
+        // would make us the recorded remover, and OP's reply would then
+        // approve a post someone else meant to hold.
         alreadyRemoved = true;
       } else {
         await withGrpcRetry(() => post.remove(), 'gatePost:remove');
@@ -166,30 +173,67 @@ async function gatePost(
     }
   }
 
-  const subreddit = context.subredditName ?? '';
+  /** Never leave a post removed with nothing telling OP why. */
+  const rollback = async (why: string) => {
+    if (!removedByUs) return;
+    try {
+      const r = await approveIfOurs(postId, true);
+      log('rolled-back', {
+        postId,
+        why,
+        approved: r.approved,
+        reason: r.reason,
+      });
+    } catch (err) {
+      console.error(
+        `${LOG_PREFIX} STUCK postId=${postId} rollback approve failed after: ${why}`,
+        err
+      );
+    }
+  };
+
   const text = render(settings.requestText, {
     author: authorName,
     subreddit,
     post_link: postLink(subreddit, postId),
   });
 
+  // Not retried: if the first attempt landed but its response was lost, a
+  // retry would post a second request comment.
   let comment;
   try {
-    comment = await withGrpcRetry(
-      () => reddit.submitComment({ id: postId, text, runAs: 'APP' }),
-      'gatePost:submitComment'
-    );
+    comment = await reddit.submitComment({ id: postId, text, runAs: 'APP' });
   } catch (err) {
     console.error(`${LOG_PREFIX} request comment failed postId=${postId}`, err);
-    // Never leave a post removed with nothing telling OP why.
-    if (removedByUs) {
-      await approveIfOurs(postId, true).catch((e: unknown) =>
-        console.error(
-          `${LOG_PREFIX} rollback approve failed postId=${postId}`,
+    await rollback('request comment failed');
+    return;
+  }
+
+  // Write the record before anything else, so a fast reply from OP finds it.
+  const record: GateRecord = {
+    commentId: comment.id,
+    status: 'pending',
+    removedByUs,
+    distinguished: false,
+    createdAt: Date.now(),
+  };
+  try {
+    await setGate(postId, record);
+  } catch (err) {
+    console.error(
+      `${LOG_PREFIX} gate record write failed postId=${postId}`,
+      err
+    );
+    // Without a record OP's reply can't be matched, so undo the gate.
+    await rollback('gate record write failed');
+    await comment
+      .delete()
+      .catch((e: unknown) =>
+        console.warn(
+          `${LOG_PREFIX} delete request comment failed postId=${postId}`,
           e
         )
       );
-    }
     return;
   }
 
@@ -199,15 +243,16 @@ async function gatePost(
     postId,
     'gatePost:distinguish'
   );
+  if (distinguished) {
+    await setGate(postId, { ...record, distinguished }).catch((e: unknown) =>
+      // Harmless: the next edit re-attempts the distinguish.
+      console.warn(
+        `${LOG_PREFIX} distinguished flag write failed postId=${postId}`,
+        e
+      )
+    );
+  }
 
-  const record: GateRecord = {
-    commentId: comment.id,
-    status: 'pending',
-    removedByUs,
-    distinguished,
-    createdAt: Date.now(),
-  };
-  await setGate(postId, record);
   log('gated', {
     postId,
     author: authorName,
@@ -218,10 +263,10 @@ async function gatePost(
   });
 }
 
-triggers.post('/on-comment-submit', async (c) => {
-  let body: CommentSubmitBody;
+triggers.post('/on-comment-create', async (c) => {
+  let body: OnCommentCreateRequest;
   try {
-    body = await c.req.json<CommentSubmitBody>();
+    body = await c.req.json<OnCommentCreateRequest>();
   } catch {
     return c.json<TriggerResponse>(ok, 200);
   }
@@ -234,19 +279,20 @@ triggers.post('/on-comment-submit', async (c) => {
     return c.json<TriggerResponse>(ok, 200);
   }
 
+  const postId = comment.postId as T3;
   try {
     await handleReply({
-      postId: comment.postId as T3,
+      postId,
       commentId: comment.id,
       parentId: comment.parentId,
       authorId: author.id,
       authorName: author.name ?? '',
-      body: comment.body ?? '',
       postAuthorId: body.post?.authorId,
+      subreddit: subredditNameFrom(body.subreddit?.name),
     });
   } catch (err) {
     console.error(
-      `${LOG_PREFIX} on-comment-submit error commentId=${comment.id}`,
+      `${LOG_PREFIX} on-comment-create error postId=${postId} commentId=${comment.id}`,
       err
     );
   }
@@ -259,8 +305,8 @@ async function handleReply(input: {
   parentId: string;
   authorId: string;
   authorName: string;
-  body: string;
   postAuthorId: string | undefined;
+  subreddit: string;
 }): Promise<void> {
   const { postId } = input;
   const record = await getGate(postId);
@@ -271,7 +317,22 @@ async function handleReply(input: {
     parentId: input.parentId,
     isOp: undefined,
   });
-  if (pre.kind === 'ignore' || !record) return;
+  if (pre.kind === 'ignore' || !record) {
+    // OP replying to a comment on a post with no record is the "stuck" case
+    // worth seeing in the logs; everything else is routine.
+    if (
+      !record &&
+      input.postAuthorId === input.authorId &&
+      input.parentId.startsWith('t1_')
+    ) {
+      log('ignore-reply', {
+        postId,
+        commentId: input.commentId,
+        reason: 'OP reply on a post with no gate record',
+      });
+    }
+    return;
+  }
 
   let postAuthorId = input.postAuthorId;
   if (!postAuthorId) {
@@ -296,61 +357,103 @@ async function handleReply(input: {
     return;
   }
 
-  if (!(await claimOnce(REDIS_KEYS.confirmClaim(postId), TTL.gate))) {
+  // Re-read the reply: if AutoMod or the spam filter removed it, don't quote
+  // it into our comment. Not locked yet, so OP's next reply can still count.
+  const reply = await withGrpcRetry(
+    () => reddit.getCommentById(input.commentId as T1),
+    'handleReply:getReply'
+  );
+  if (reply.removed || reply.spam) {
     log('ignore-reply', {
       postId,
       commentId: input.commentId,
-      reason: 'already confirming',
+      reason: 'reply is removed or spam',
     });
     return;
   }
 
+  const lockKey = REDIS_KEYS.confirmLock(postId);
+  if (!(await claimOnce(lockKey, TTL.confirmLock))) {
+    log('ignore-reply', {
+      postId,
+      commentId: input.commentId,
+      reason: 'another reply is being confirmed',
+    });
+    return;
+  }
+
+  try {
+    await confirm(input, record, decision.approve, reply.body);
+  } catch (err) {
+    // Leave the record pending and release the lock, so OP's next reply
+    // retries. Edit and approve are both safe to repeat.
+    await releaseClaim(lockKey);
+    throw err;
+  }
+}
+
+async function confirm(
+  input: {
+    postId: T3;
+    commentId: string;
+    authorName: string;
+    subreddit: string;
+  },
+  record: GateRecord,
+  approve: boolean,
+  replyBody: string
+): Promise<void> {
+  const { postId, subreddit } = input;
   const settings = await getSettings();
-  const subreddit = context.subredditName ?? '';
   const text = render(settings.confirmedText, {
     author: input.authorName,
     subreddit,
     post_link: postLink(subreddit, postId),
-    reply: quoteReply(input.body),
+    reply: quoteReply(replyBody),
     reply_link: commentLink(subreddit, postId, input.commentId),
   });
 
+  let edited = false;
   let distinguished = record.distinguished;
   try {
     const botComment = await withGrpcRetry(
       () => reddit.getCommentById(record.commentId as T1),
-      'handleReply:getCommentById'
+      'confirm:getCommentById'
     );
-    await withGrpcRetry(() => botComment.edit({ text }), 'handleReply:edit');
+    await withGrpcRetry(() => botComment.edit({ text }), 'confirm:edit');
+    edited = true;
     // Self-heal a pin that failed when the comment was created.
     if (!distinguished) {
       distinguished = await distinguishComment(
         botComment,
         settings.stickyComment,
         postId,
-        'handleReply:distinguish'
+        'confirm:distinguish'
       );
     }
   } catch (err) {
-    console.warn(
-      `${LOG_PREFIX} edit request comment failed postId=${postId}`,
+    console.error(
+      `${LOG_PREFIX} edit request comment failed postId=${postId} commentId=${record.commentId}`,
       err
     );
   }
 
-  await setGate(postId, { ...record, status: 'confirmed', distinguished });
+  // OP did their part, so approve even if the edit failed.
+  let approval = { approved: false, reason: 'app did not remove the post' };
+  if (approve) approval = await approveIfOurs(postId, record.removedByUs);
 
-  let approval: { approved: boolean; reason: string } = {
-    approved: false,
-    reason: 'app did not remove the post',
-  };
-  if (decision.approve) {
-    approval = await approveIfOurs(postId, record.removedByUs);
+  if (edited) {
+    await setGate(postId, { ...record, status: 'confirmed', distinguished });
+  } else {
+    // Keep it pending so OP's next reply retries the edit.
+    await releaseClaim(REDIS_KEYS.confirmLock(postId));
   }
+
   log('confirmed', {
     postId,
     author: input.authorName,
     replyId: input.commentId,
+    edited,
     approved: approval.approved,
     reason: approval.reason,
   });

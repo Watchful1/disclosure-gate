@@ -7,8 +7,8 @@
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
-    "onPostSubmit": "/internal/triggers/on-post-submit",
-    "onCommentSubmit": "/internal/triggers/on-comment-submit"
+    "onPostCreate": "/internal/triggers/on-post-create",
+    "onCommentCreate": "/internal/triggers/on-comment-create"
   },
   "settings": {
     "subreddit": {

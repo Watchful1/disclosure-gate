@@ -16,7 +16,19 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 - [ ] Request text containing `{{reply}}` → save rejected, error mentions the confirmed text.
 - [ ] Request text containing `{{foo}}` → rejected, error lists the valid placeholders.
 - [ ] Empty confirmed text → rejected.
+- [ ] Request text containing `{{post-link}}` (hyphen) → rejected as unknown.
+- [ ] Confirmed text with `{{reply}}` four times → rejected as over the length limit.
 - [ ] Restore the defaults → save succeeds.
+
+## Platform questions (answer these first)
+
+The triggers are `onPostCreate` / `onCommentCreate`, which fire after Reddit's safety delay.
+
+- [ ] How long after submitting does the post get removed? (This is the window it's visible.)
+- [ ] In the `confirmed` log, is `reason` "current removal is ours (removedBy matches app account)"? If it says the removal belongs to someone else, `removedBy` isn't the app's name and nothing will ever be approved.
+- [ ] Post and comment ids in the logs have `t3_` / `t1_` prefixes.
+- [ ] No `addRemovalNote failed` warnings (it's sent with an empty `reasonId`).
+- [ ] A crosspost into the sub gets gated like a normal post.
 
 ## Core flow (Remove on, Sticky on)
 
@@ -32,7 +44,8 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 ## Someone else's removal is respected
 
 - [ ] Alt posts → gated. A mod removes the post manually. Alt replies → the comment is edited, but the post **stays removed**. Log: `approved=false reason="current removal belongs to u/<mod>"`.
-- [ ] Add an AutoMod rule that filters the alt's posts. Alt posts → the comment is posted but the app doesn't remove the post again. Log: `gated ... removed=false alreadyRemoved=true`. Alt replies → the comment is edited and the post **stays in the queue**. Log: `approved=false reason="app did not remove the post"`.
+- [ ] Add an AutoMod rule that filters the alt's posts. Alt posts → either no trigger fires at all, or the comment is posted but the app doesn't remove the post again (log: `gated ... removed=false alreadyRemoved=true`). Note which. Alt replies → the post **stays in the queue**. Log: `approved=false reason="app did not remove the post"`.
+- [ ] Add an AutoMod rule that removes comments containing a test word. Alt replies to the app's comment with that word → nothing is quoted. Log: `ignore-reply ... reason="reply is removed or spam"`. Alt replies again without it → confirmed as normal.
 
 ## Toggles
 

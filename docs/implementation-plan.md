@@ -51,33 +51,45 @@ An empty/whitespace value at runtime falls back to the default.
 distinguished, createdAt }`, TTL 30 days. Serves as: the cheap "is this a
   reply to our pending comment" check (no API call), first-reply-wins
   idempotency, and the removed-by-us fallback for the approval gate.
-- `seen:<postId>`, 1h SETNX — PostSubmit duplicate-delivery guard.
+- `seen:<postId>`, 1h SETNX — duplicate-delivery guard; released if the flow throws so a redelivery can retry.
+- `confirm:<postId>`, 5 min SETNX — stops two simultaneous OP replies both confirming; released on failure.
 - `mods:cache`, 15 min — moderator list.
 
 ## Flows
 
-**PostSubmit**
+Triggers are `onPostCreate` / `onCommentCreate`, which fire after Reddit's
+safety delay, so AutoMod and the spam filter have already acted. (Changed
+from PostSubmit / CommentSubmit after code review.)
+
+**PostCreate**
 
 1. Duplicate delivery / exempt → skip. Exemption order: mod,
    post flair, approved user (API call only when toggle on).
-2. `removePost` on → `post.remove()`, then `addRemovalNote` with the fixed
-   note (failure logged, not fatal).
-3. Submit rendered `requestText` as the app; distinguish+sticky if enabled
-   (retry once on transient gRPC error).
-4. Write the record. If the comment fails after removal, re-approve the post
-   so it is never left removed with no explanation.
+2. `removePost` on → if the post is already removed, spam, or has a removal
+   category, leave it alone (not ours). Otherwise `post.remove()` and
+   `addRemovalNote` with the fixed note (failure logged, not fatal).
+3. Submit rendered `requestText` as the app. Not retried, to avoid a
+   duplicate comment; on failure, re-approve the post.
+4. Write the record immediately, before distinguishing, so a fast OP reply
+   finds it. If the write fails, re-approve and delete the comment.
+5. Distinguish+sticky if enabled, then record that it landed.
 
-**CommentSubmit**
+**CommentCreate**
 
 1. Skip the app's own comments.
 2. Load `gate:<postId>`; continue only if `pending` and
    `parentId === commentId`.
 3. Confirm the commenter is OP (`post.authorId`).
-4. Flip the record to `confirmed` first (first reply wins).
-5. Edit the bot comment to rendered `confirmedText`; re-attempt the sticky if
+4. Re-read the reply; skip it if removed or spam (no lock taken, so OP can
+   reply again).
+5. Take the 5-minute confirm lock.
+6. Edit the bot comment to rendered `confirmedText`; re-attempt the sticky if
    it never landed.
-6. If we removed the post, approve it via the approval gate — never undo a
-   removal owned by another mod/bot (`removedBy` check, marker fallback).
+7. If we removed the post, approve it via the approval gate — never undo a
+   removal owned by another mod/bot (`removedBy` check; the marker fallback
+   only applies when not spam and the category is a mod removal).
+8. Mark the record `confirmed` only if the edit succeeded. On any failure the
+   record stays `pending` and the lock is released, so OP's next reply retries.
 
 **AppInstall** — warm the mod cache.
 
