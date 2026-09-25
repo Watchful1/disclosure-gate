@@ -16,6 +16,8 @@ Only OP's first direct reply counts. Mods are exempt, and if another mod or bot 
 
 The default text asks about AI, but you can change it to ask anything.
 
+Reach out to [u/Watchful1](https://www.reddit.com/user/Watchful1) with any bugs or feature requests.
+
 ## Development
 
 ```bash
