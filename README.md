@@ -18,12 +18,4 @@ The default text asks about AI, but you can change it to ask anything.
 
 Reach out to [u/Watchful1](https://www.reddit.com/user/Watchful1) with any bugs or feature requests.
 
-## Development
-
-```bash
-npm install
-npm test
-npm run dev    # devvit playtest
-```
-
 [Source](https://github.com/Watchful1/disclosure-gate) · [Privacy policy](https://github.com/Watchful1/disclosure-gate/blob/main/docs/privacy-policy.md) · [Terms of service](https://github.com/Watchful1/disclosure-gate/blob/main/docs/terms-of-service.md) · [BSD-3-Clause](https://github.com/Watchful1/disclosure-gate/blob/main/LICENSE)
