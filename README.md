@@ -4,7 +4,7 @@ A Devvit app that makes posters disclose AI usage before their post goes up.
 
 When a post is submitted, the app removes it and leaves a stickied comment asking OP whether they used AI tools. Once OP replies to that comment, the post is approved and the comment is edited to quote the reply.
 
-Only OP's first direct reply counts. Mods are exempt, and if another mod or bot removes the post in the meantime, it stays removed. OP has 30 days to reply; after that the post stays removed unless a mod approves it.
+Only OP's first direct reply counts. Mods are exempt, and if another mod or bot removes the post in the meantime, it stays removed.
 
 ## Settings
 
