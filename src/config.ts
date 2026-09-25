@@ -18,7 +18,6 @@ export const DEFAULT_CONFIRMED_TEXT =
   '^([original reply]({{reply_link}}))';
 
 export const SETTING_DEFAULTS = {
-  enabled: false,
   removePost: true,
   stickyComment: true,
   exemptApprovedUsers: false,

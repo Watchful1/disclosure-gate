@@ -23,13 +23,11 @@ export type PostDecision =
   | { kind: 'gate'; remove: boolean; sticky: boolean };
 
 export function decidePost(args: {
-  enabled: boolean;
   removePost: boolean;
   stickyComment: boolean;
   exemption: Exemption | null;
   alreadyGated: boolean;
 }): PostDecision {
-  if (!args.enabled) return { kind: 'skip', reason: 'app disabled' };
   if (args.exemption) {
     return { kind: 'skip', reason: `author exempt (${args.exemption})` };
   }

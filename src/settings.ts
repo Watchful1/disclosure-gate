@@ -3,7 +3,6 @@ import { LOG_PREFIX, SETTING_DEFAULTS } from './config';
 
 /** Fully populated settings snapshot; every field falls back to its default. */
 export type ResolvedSettings = {
-  enabled: boolean;
   removePost: boolean;
   stickyComment: boolean;
   exemptApprovedUsers: boolean;
@@ -39,7 +38,6 @@ export function resolveSettings(
 ): ResolvedSettings {
   const d = SETTING_DEFAULTS;
   return {
-    enabled: coerceBoolean(raw.enabled, d.enabled),
     removePost: coerceBoolean(raw.removePost, d.removePost),
     stickyComment: coerceBoolean(raw.stickyComment, d.stickyComment),
     exemptApprovedUsers: coerceBoolean(

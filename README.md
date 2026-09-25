@@ -20,6 +20,8 @@ The app never undoes another moderator's decision. If a mod, AutoMod or another 
 
 OP has 30 days to reply. After that the app stops tracking the post.
 
+The app is active as soon as it's installed, and only affects posts submitted after that. To stop it, uninstall it.
+
 ## Settings
 
 Configure the app from your subreddit's app settings page: `https://developers.reddit.com/r/<subreddit>/apps/disclosure-gate`.
@@ -28,7 +30,6 @@ Configure the app from your subreddit's app settings page: `https://developers.r
 
 | Setting                       | Default | Description                                                                             |
 | ----------------------------- | ------- | --------------------------------------------------------------------------------------- |
-| Enabled                       | off     | Turns the gate on for new posts. Existing posts are never affected.                     |
 | Remove posts until OP replies | on      | If off, the comment is still posted and updated, but the post stays visible throughout. |
 | Sticky the disclosure comment | on      | Distinguishes and pins the app's comment to the top of the post.                        |
 

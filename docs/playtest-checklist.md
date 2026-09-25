@@ -8,9 +8,8 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 ## Setup
 
 - [ ] Settings page shows three groups: General, Exemptions, Comment text.
-- [ ] Defaults: Enabled off, Remove on, Sticky on, Exempt approved users off,
+- [ ] Defaults: Remove on, Sticky on, Exempt approved users off,
       flair list empty, AI disclosure texts filled in.
-- [ ] Turn **Enabled** on.
 
 ## Settings validation
 
@@ -38,7 +37,6 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 
 - [ ] Remove **off**: alt posts → the post stays visible and the comment is posted. Alt replies → the comment is edited. Log: `approved=false reason="app did not remove the post"`.
 - [ ] Sticky **off**: the comment is posted and distinguished, but not pinned.
-- [ ] Enabled **off**: alt posts → nothing happens. Log: `skip-post ... app disabled`.
 
 ## Exemptions
 

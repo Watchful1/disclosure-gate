@@ -10,7 +10,6 @@ describe('resolveSettings', () => {
 
   it('passes through valid values', () => {
     const r = resolveSettings({
-      enabled: true,
       removePost: false,
       stickyComment: false,
       exemptApprovedUsers: true,
@@ -19,7 +18,6 @@ describe('resolveSettings', () => {
       confirmedText: 'Thanks {{reply}}',
     });
     expect(r).toEqual({
-      enabled: true,
       removePost: false,
       stickyComment: false,
       exemptApprovedUsers: true,
@@ -31,11 +29,9 @@ describe('resolveSettings', () => {
 
   it('rejects wrong types', () => {
     const r = resolveSettings({
-      enabled: 'yes',
       removePost: 1,
       exemptPostFlairs: 5,
     });
-    expect(r.enabled).toBe(SETTING_DEFAULTS.enabled);
     expect(r.removePost).toBe(SETTING_DEFAULTS.removePost);
     expect(r.exemptPostFlairs).toBe(SETTING_DEFAULTS.exemptPostFlairs);
   });

@@ -9,7 +9,6 @@ import {
 
 describe('decidePost', () => {
   const base = {
-    enabled: true,
     removePost: true,
     stickyComment: true,
     exemption: null,
@@ -25,12 +24,6 @@ describe('decidePost', () => {
     expect(
       decidePost({ ...base, removePost: false, stickyComment: false })
     ).toEqual({ kind: 'gate', remove: false, sticky: false });
-  });
-
-  it('skips when disabled', () => {
-    expect(decidePost({ ...base, enabled: false })).toMatchObject({
-      kind: 'skip',
-    });
   });
 
   it.each(['moderator', 'post-flair', 'approved-user'] as const)(

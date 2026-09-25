@@ -11,7 +11,7 @@ description and default setting text frame it as an AI disclosure app.
 
 ## Decisions
 
-- No shadow mode — just an `enabled` toggle.
+- No shadow mode and no on/off toggle: installed means active; uninstall to stop.
 - Removing the post and stickying the comment are both toggles.
 - Only a **direct reply by OP** to the bot comment counts. No minimum length,
   no "any top-level comment" option. First reply wins.
@@ -29,7 +29,6 @@ description and default setting text frame it as an AI disclosure app.
 
 | Group      | Key                   | Type      | Default               |
 | ---------- | --------------------- | --------- | --------------------- |
-| General    | `enabled`             | boolean   | `false`               |
 | General    | `removePost`          | boolean   | `true`                |
 | General    | `stickyComment`       | boolean   | `true`                |
 | Exemptions | `exemptApprovedUsers` | boolean   | `false`               |
@@ -59,7 +58,7 @@ distinguished, createdAt }`, TTL 30 days. Serves as: the cheap "is this a
 
 **PostSubmit**
 
-1. Duplicate delivery / disabled / exempt → skip. Exemption order: mod,
+1. Duplicate delivery / exempt → skip. Exemption order: mod,
    post flair, approved user (API call only when toggle on).
 2. `removePost` on → `post.remove()`, then `addRemovalNote` with the fixed
    note (failure logged, not fatal).
@@ -109,7 +108,7 @@ settings coercion pattern.
 ## Tests (Vitest)
 
 - template: rendering, reply quoting/truncation, no re-expansion, validation.
-- gate: post decisions (disabled, exempt, remove/sticky toggles) and reply
+- gate: post decisions (exempt, remove/sticky toggles) and reply
   decisions (OP vs not, wrong parent, confirmed, missing record).
 - exemptions: flair list parsing and matching.
 - settings: coercion and fallbacks.

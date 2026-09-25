@@ -16,12 +16,6 @@
         "type": "group",
         "label": "General",
         "fields": {
-          "enabled": {
-            "type": "boolean",
-            "label": "Enabled",
-            "helpText": "Turn the disclosure gate on for new posts. Posts made while this is off are never gated.",
-            "defaultValue": false
-          },
           "removePost": {
             "type": "boolean",
             "label": "Remove posts until OP replies",
@@ -80,5 +74,8 @@
   },
   "permissions": {
     "reddit": true
+  },
+  "dev": {
+    "subreddit": "disclosure_gate_dev"
   }
 }

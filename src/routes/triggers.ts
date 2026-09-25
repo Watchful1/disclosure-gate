@@ -120,13 +120,9 @@ async function gatePost(
 ): Promise<void> {
   const settings = await getSettings();
   const decision = decidePost({
-    enabled: settings.enabled,
     removePost: settings.removePost,
     stickyComment: settings.stickyComment,
-    // Skip the exemption lookups entirely when disabled.
-    exemption: settings.enabled
-      ? await findExemption(authorName, flairText, settings)
-      : null,
+    exemption: await findExemption(authorName, flairText, settings),
     alreadyGated: (await getGate(postId)) !== null,
   });
   if (decision.kind === 'skip') {

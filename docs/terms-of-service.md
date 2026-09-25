@@ -8,7 +8,7 @@ _Last updated: 2026-09-24_
 
 ## 2. What the app does
 
-In subreddits where moderators have installed and enabled it, the app:
+In subreddits where moderators have installed it, the app:
 
 - optionally removes new posts, and posts a comment asking the author to reply with a disclosure
 - when the author replies, edits that comment (by default quoting the reply) and approves the post, unless another moderator or bot has removed it in the meantime.
