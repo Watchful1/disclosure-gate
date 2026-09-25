@@ -24,4 +24,4 @@ npm test
 npm run dev    # devvit playtest
 ```
 
-[Privacy policy](docs/privacy-policy.md) · [Terms of service](docs/terms-of-service.md) · [BSD-3-Clause](LICENSE)
+[Source](https://github.com/Watchful1/disclosure-gate) · [Privacy policy](https://github.com/Watchful1/disclosure-gate/blob/main/docs/privacy-policy.md) · [Terms of service](https://github.com/Watchful1/disclosure-gate/blob/main/docs/terms-of-service.md) · [BSD-3-Clause](https://github.com/Watchful1/disclosure-gate/blob/main/LICENSE)
