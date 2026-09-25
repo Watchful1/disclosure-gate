@@ -32,6 +32,7 @@ subreddit and streams its logs. Moderators are exempt, so post from a
 ## Someone else's removal is respected
 
 - [ ] Alt posts → gated. A mod removes the post manually. Alt replies → the comment is edited, but the post **stays removed**. Log: `approved=false reason="current removal belongs to u/<mod>"`.
+- [ ] Add an AutoMod rule that filters the alt's posts. Alt posts → the comment is posted but the app doesn't remove the post again. Log: `gated ... removed=false alreadyRemoved=true`. Alt replies → the comment is edited and the post **stays in the queue**. Log: `approved=false reason="app did not remove the post"`.
 
 ## Toggles
 

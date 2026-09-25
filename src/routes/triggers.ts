@@ -131,14 +131,22 @@ async function gatePost(
   }
 
   let removedByUs = false;
+  let alreadyRemoved = false;
   if (decision.remove) {
     try {
       const post = await withGrpcRetry(
         () => reddit.getPostById(postId),
         'gatePost:getPostById'
       );
-      await withGrpcRetry(() => post.remove(), 'gatePost:remove');
-      removedByUs = true;
+      // If AutoMod, the spam filter or a mod already removed it, leave that
+      // removal alone. Removing again would make us the recorded remover, and
+      // OP's reply would then approve a post someone else meant to hold.
+      if (post.removed) {
+        alreadyRemoved = true;
+      } else {
+        await withGrpcRetry(() => post.remove(), 'gatePost:remove');
+        removedByUs = true;
+      }
     } catch (err) {
       console.warn(`${LOG_PREFIX} remove failed postId=${postId}`, err);
     }
@@ -205,6 +213,7 @@ async function gatePost(
     author: authorName,
     commentId: comment.id,
     removed: removedByUs,
+    alreadyRemoved: alreadyRemoved || undefined,
     sticky: decision.sticky && distinguished,
   });
 }
